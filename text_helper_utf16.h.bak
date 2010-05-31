@@ -1,0 +1,390 @@
+/* ------------------------------------------------------------------------- */
+/*
+ *  text_helper_utf16.h
+ *
+ *  Copyright (c) 2009, Four and More. All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted provided that the following conditions
+ *  are met:
+ *
+ *    - Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    - Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
+ *      documentation and/or other materials provided with the distribution.
+ *    - No names of its contributors may be used to endorse or promote
+ *      products derived from this software without specific prior written
+ *      permission.
+ *
+ *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ *  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ *  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ *  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+ *  TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ *  PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+ *  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ *  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ *  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ *  Last-modified: Mon 11 May 2009 16:38:00 JST
+ */
+/* ------------------------------------------------------------------------- */
+#ifndef FAML_PDF_TEXT_HELPER_UTF16_H
+#define FAML_PDF_TEXT_HELPER_UTF16_H
+
+#include <cctype>
+#include <deque>
+#include "code_convert.h"
+#include "utf16.h"
+#include "utility.h"
+
+namespace faml {
+	namespace pdf {
+		namespace utf16 {
+			/* ------------------------------------------------------------- */
+			//  is_alnum
+			/* ------------------------------------------------------------- */
+			bool is_alnum(word_type c) {
+				if (c >= 0x007f) return false;
+				return std::isalnum(static_cast<char>(c)) != 0;
+			}
+			
+			/* ------------------------------------------------------------- */
+			//  is_space
+			/* ------------------------------------------------------------- */
+			bool is_space(word_type c) {
+				if (c == 0x0020 || c == 0x00a0 || c == 0x3000) return true;
+				return false;
+			}
+			
+			/* ------------------------------------------------------------- */
+			//  is_break
+			/* ------------------------------------------------------------- */
+			bool is_break(word_type c) {
+				if (c == 0x000c || c == 0x000a) return true;
+				return false;
+			}
+			
+			/* ------------------------------------------------------------- */
+			//  is_lpunct
+			/* ------------------------------------------------------------- */
+			bool is_lpunct(word_type c) {
+				static const word_type codes[] = {
+					0xff5f,		// double parentheses
+					0x003c,		// <
+					0xff1c,		// ÅÉ
+					0x0028,		// parenthesis: (
+					0xff08,		// parenthesis: Åi
+					0x300c,		// corner bracket: Åu
+					0xff62,		// corner bracket: ¢
+					0x300e,		// white corner bracket: Åw
+					0x007b,		// {
+					0xff5b,		// Åo
+					0x005b,		// [
+					0xff3b,		// Åm
+					0x3014,		// Åk
+					0x3818,		// double turtle parentheses
+					0x3008,		// Åq
+					0x300a,		// Ås
+					0x3010,		// with-corner-parenthesis:Åy
+					0x3016,		// white with-corner-parenthesis
+					0x301d,		// áÄ
+					0x2018,		// Åe
+					0x201c,		// Åg
+					0x00ab		// Å·
+				};
+				
+				for (size_t i = 0; i < sizeof(codes) / sizeof(word_type); ++i) {
+					if (c == codes[i]) return true;
+				}
+				return false;
+			}
+			
+			/* ------------------------------------------------------------- */
+			/*
+			 *  is_rpunct
+			 *
+			 *  í«Ç¢èoÇµÇ≈ëŒâûÇ∑ÇÈï∂éöàÍóóÅD
+			 */
+			/* ------------------------------------------------------------- */
+			bool is_rpunct(word_type c) {
+				static const word_type codes[] = {
+					0x30fc,		// Å[
+					0xff70,		// ∞
+					0x2014,		// dash mark
+					0x2013,		// dash mark
+					0x301c,		// wave dash mark
+					0x3005,		// ÅX
+					0x309d,		// ÅT
+					0x309e,		// ÅU
+					0x30fd,		// ÅR
+					0x30fe,		// ÅS
+					0x3003,		// ÅV
+					0xff0d,		// Å|
+					0x002d,		// -
+					0x2010,		// Å]
+					0xff0f,		// Å^
+					0x002f,		// /
+					0xff3c,		// full-length backslash
+					0x005c,		// backslash
+					0x30a1,		// É@
+					0x30a3,		// ÉB
+					0x30a5,		// ÉD
+					0x30a7,		// ÉF
+					0x30a9,		// ÉH
+					0x30c3,		// Éb
+					0x30e3,		// ÉÉ
+					0x30e5,		// ÉÖ
+					0x30e7,		// Éá
+					0x30ee,		// Éé
+					0x30f5,		// Éï
+					0x30f6,		// Éñ
+					0x3041,		// Çü
+					0x3043,		// Ç°
+					0x3045,		// Ç£
+					0x3047,		// Ç•
+					0x3049,		// Çß
+					0x3063,		// Ç¡
+					0x3083,		// Ç·
+					0x3085,		// Ç„
+					0x3087,		// ÇÂ
+					0x308e		// ÇÏ
+				};
+				
+				if (is_space(c) || is_break(c)) return true;
+				for (size_t i = 0; i < sizeof(codes) / sizeof(word_type); ++i) {
+					if (c == codes[i]) return true;
+				}
+				
+				return false;
+			}
+			
+			/* ------------------------------------------------------------- */
+			/*
+			 *  is_rfollow
+			 *
+			 *  Ç‘ÇÁâ∫Ç∞Ç≈ëŒâûÇ∑ÇÈï∂éöàÍóóÅD
+			 */
+			/* ------------------------------------------------------------- */
+			bool is_rfollow(word_type c) {
+				static const word_type codes[] = {
+					0xff61,		// °
+					0x3002,		// ÅB
+					0xff64,		// §
+					0x3001,		// ÅA
+					0x003e,		// >
+					0xff1e,		// ÅÑ
+					0xff60,		// doble closed parentheses
+					0x0029,		// closed parenthesis: )
+					0xff09,		// closed parenthesis: Åj
+					0xff63,		// £
+					0x300d,		// Åv
+					0x007b,		// Åx
+					0x007d,		// }
+					0xff5d,		// Åp
+					0x005d,		// ]
+					0xff3d,		// Ån
+					0x3015,		// Ål
+					0x3019,		// double closed turtle parentheses
+					0x3009,		// År
+					0x300b,		// Åt
+					0x3011,		// closed with-corner-parenthesis: Åz
+					0x3017,		// white closed with-corner-parenthesis
+					0x301f,		// áÅ
+					0x2025,		// Åd
+					0x2026,		// Åc
+					0x30fb,		// ÅE
+					0xff65,		// •
+					0x0021,		// !
+					0xff01,		// ÅI
+					0x003f,		// ?
+					0x203c,		// double exclamation marks
+					0x2047,		// double question marks
+					0x2048,		// question and exclamation marks
+					0x2049,		// exclamation and question marks
+					0xff0e,		// ÅD
+					0x002e,		// .
+					0xff0c,		// ÅC
+					0x002c,		// ,
+					0x00bf,		// inverted question mark
+					0x00a1,		// inverted exclamation mark
+					0x203d,		// interrobang
+					0xff1a,		// ÅF
+					0x003a,		// :
+					0xff1b,		// ÅG
+					0x003b,		// ;
+					0x2019,		// Åf
+					0x201d,		// Åh
+					0x00bb,		// Å‚
+				};
+				
+				if (is_space(c) || is_break(c)) return true;
+				for (size_t i = 0; i < sizeof(codes) / sizeof(word_type); ++i) {
+					if (c == codes[i]) return true;
+				}
+				
+				return false;
+			}
+			
+			/* ------------------------------------------------------------- */
+			//  chomp
+			/* ------------------------------------------------------------- */
+			template <class String>
+			String& chomp(String& src) {
+				size_t pos = src.size();
+				while (pos > 1) {
+					unsigned char c = src.at(pos - 2);
+					unsigned char c2 = src.at(pos - 1);
+					if (!(c == 0x00 && (c2 == 0x0a || c2 == 0x0c || c2 == 0x0d))) break;
+					pos -= 2;
+				}
+				
+				src.erase(pos);
+				return src;
+			}
+			
+			/* ------------------------------------------------------------- */
+			//  count
+			/* ------------------------------------------------------------- */
+			template <class InIter>
+			size_t count(InIter first, InIter last) {
+				size_t n = 0;
+				while (first != last) {
+					++first;
+					if (first == last) break;
+					++n;
+					++first;
+				}
+				return n;
+			}
+			
+			/* ------------------------------------------------------------- */
+			//  width
+			/* ------------------------------------------------------------- */
+			template <class InIter, class Property>
+			size_t width(InIter first, InIter last, const Property& info) {
+				size_t n = 0;
+				while (first != last) {
+					byte_type c = static_cast<byte_type>(*first);
+					++first;
+					if (first == last) break;
+					byte_type c2 = static_cast<byte_type>(*first);
+					++first;
+					
+					int code = (static_cast<int>(c) << 8) | static_cast<int>(c2);
+					if (info.type() == 1) {
+						if (code <= 0x007f) {
+							if (static_cast<size_t>(code) < info.widths().size()) n += info.widths().at(code);
+							else n += 500;
+						}
+						else n += 1000;
+					}
+					else { // Type0 ÉtÉHÉìÉg
+						code = to_cid(code);
+						if (code > 0 && static_cast<size_t>(code) < info.widths().size()) n += info.widths().at(code);
+						else if (is_half(code)) n += 500;
+						else n += 1000;
+					}
+				}
+				return n;
+			}
+			
+			/* ------------------------------------------------------------- */
+			//  getline
+			/* ------------------------------------------------------------- */
+			template <class InIter, class OutIter, class Property>
+			size_t getline(InIter& first, InIter last, OutIter out,
+				size_t limit, bool wrap, const Property& info) {
+				std::deque<byte_type> v;
+				InIter cur = first;
+				size_t m = 0, n = 0;
+				while (first != last && n < limit) {
+					byte_type c = static_cast<byte_type>(*first);
+					++first;
+					//if (first == last) break;
+					if (first == last) throw std::runtime_error("bad character code");
+					byte_type c2 = static_cast<byte_type>(*first);
+					++first;
+					word_type wc = ((c << 8) | c2);
+					
+					size_t l = 0;
+					int code = (static_cast<int>(c) << 8) | static_cast<int>(c2);
+					if (info.type() == 1) {
+						if (code <= 0x007f) {
+							if (static_cast<size_t>(code) < info.widths().size()) {
+								l = info.widths().at(code);
+							}
+							else l = 500;
+						}
+						else l = 1000;
+					}
+					else { // Type0 ÉtÉHÉìÉg
+						code = to_cid(code);
+						if (code > 0 && static_cast<size_t>(code) < info.widths().size()) l = info.widths().at(code);
+						else if (is_half(code)) l = 500;
+						else l = 1000;
+					}
+					
+					if (n + m + l >= limit) {
+						if (is_rfollow(wc)) {
+							v.push_back(c);
+							v.push_back(c2);
+							m += l;
+							
+							out = std::copy(v.begin(), v.end(), out);
+							v.clear();
+							n += m;
+						}
+						else {
+							--first;
+							--first;
+							while (!v.empty()) {
+								word_type right = (v.at(v.size() - 2) << 8) | v.at(v.size() - 1);
+								if (!is_lpunct(right)) break;
+								v.pop_back();
+								--first;
+								v.pop_back();
+								--first;
+							}
+							
+							if (!v.empty()) {
+								word_type right = (v.at(v.size() - 2) << 8) | v.at(v.size() - 1);
+								if (is_alnum(wc) && is_alnum(right)) first = cur;
+								else {
+									out = std::copy(v.begin(), v.end(), out);
+									n += faml::pdf::utf16::width(v.begin(), v.end(), info);
+								}
+							}
+						}
+						break;
+					}
+					
+					m += l;
+					v.push_back(c);
+					v.push_back(c2);
+					
+					if (!is_lpunct(wc) && (!wrap || !is_alnum(wc))) {
+						out = std::copy(v.begin(), v.end(), out);
+						n += m;
+						m = 0;
+						v.clear();
+						cur = first;
+					}
+					if (is_break(wc)) break;
+				}
+				
+				if (first == last && !v.empty()) {
+					out = std::copy(v.begin(), v.end(), out);
+					n += m;
+				}
+				
+				return n;
+			}
+		}
+	}
+}
+
+#endif // FAML_PDF_TEXT_HELPER_UTF16_H

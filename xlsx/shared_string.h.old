@@ -1,0 +1,139 @@
+/* ------------------------------------------------------------------------- */
+/*
+ *  xslx/shared_string.h
+ *
+ *  Copyright (c) 2009, Four and More, Inc. All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted provided that the following conditions
+ *  are met:
+ *
+ *    - Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    - Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
+ *      documentation and/or other materials provided with the distribution.
+ *    - No names of its contributors may be used to endorse or promote
+ *      products derived from this software without specific prior written
+ *      permission.
+ *
+ *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ *  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ *  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ *  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+ *  TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ *  PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+ *  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ *  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ *  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ *  Last-modified: Fri 05 Jun 2009 15:13:00 JST
+ */
+/* ------------------------------------------------------------------------- */
+#ifndef FAML_XLSX_SHARED_STRING_H
+#define FAML_XLSX_SHARED_STRING_H
+
+#include <cassert>
+#include <stdexcept>
+#include <string>
+#include <vector>
+#include "rapidxml/rapidxml.hpp"
+#include "clx/lexical_cast.h"
+#include "clx/literal.h"
+#include "clx/utility.h"
+
+namespace faml {
+	namespace xlsx {
+		/* ----------------------------------------------------------------- */
+		//  basic_shared_string
+		/* ----------------------------------------------------------------- */
+		template <
+			class CharT = char,
+			class Traits = std::char_traits<CharT>
+		>
+		class basic_shared_string {
+		public:
+			typedef size_t size_type;
+			typedef CharT char_type;
+			typedef std::basic_string<CharT, Traits> string_type;
+			
+			basic_shared_string() : v_() {}
+			
+			template <class InStream>
+			basic_shared_string(InStream& in) :
+				v_() { this->read(in); }
+			
+			virtual ~basic_shared_string() throw() {}
+			
+			/* ------------------------------------------------------------- */
+			/*
+			 *  read
+			 *
+			 *  Main operation of the class. Opens the xl/shredStrings.xml
+			 *  and read (shared) strings.
+			 */
+			/* ------------------------------------------------------------- */
+			template <class InStream>
+			basic_shared_string& read(InStream& in) {
+				STATIC_CHECK(sizeof(CharT) == 1, currently_limited_to_char_type);
+				
+				std::vector<char_type> s;
+				clx::read(in, s);
+				s.push_back(0); // make null terminated string.
+				
+				//rapidxml::xml_document<char_type> doc; // <- ??? compile error!!
+				rapidxml::xml_document<char> doc;
+				doc.parse<0>(reinterpret_cast<char_type*>(&s.at(0)));
+				
+				// parser OpenXML.
+				typedef rapidxml::xml_node<char_type>* node_ptr;
+				typedef rapidxml::xml_attribute<char_type>* attr_ptr;
+				
+				node_ptr root = doc.first_node(LITERAL("sst"));
+				if (!root) throw std::runtime_error("cannot find <sst> tag");
+				for (node_ptr child = root->first_node(); child; child = child->next_sibling()) {
+					node_ptr p = child->first_node(LITERAL("t"));
+					string_type s;
+					if (p && p->value_size() > 0) s = string_type(p->value());
+					else {
+						for (node_ptr it = child->first_node(); it; it = it->next_sibling()) {
+							if (string_type(it->name()) != LITERAL("r")) continue;
+							p = it->first_node(LITERAL("t"));
+							if (p && p->value_size() > 0) s += string_type(p->value());
+						}
+					}
+					
+					sst_type elem;
+					elem.first = s;
+					elem.second = 0;
+					
+					attr_ptr attr = NULL;
+					p = child->first_node(LITERAL("phoneticPr"));
+					if (p) attr = p->first_attribute(LITERAL("fontId"));
+					if (attr) elem.second = clx::lexical_cast<size_type>(attr->value());
+					v_.push_back(elem);
+				}
+				
+				return *this;
+			}
+			
+			/* ------------------------------------------------------------- */
+			//  Access methods (get).
+			/* ------------------------------------------------------------- */
+			bool empty() const { return v_.empty(); }
+			size_type size() const { return v_.size(); }
+			const string_type& data(size_type pos) const { return v_.at(pos).first; }
+			size_type font(size_type pos) const { return v_.at(pos).second; }
+			
+		private:
+			typedef std::pair<string_type, size_type> sst_type;
+			typedef std::vector<sst_type> container;
+			
+			container v_;
+		};
+	}
+}
+
+#endif // FAML_XLSX_SHARED_STRING_H
